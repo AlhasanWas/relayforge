@@ -1,0 +1,15 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Install scripts are denied unless explicitly allowed here. Both packages below
+# ship prebuilt native binaries, so their scripts are not needed.
+allowBuilds:
+  '@parcel/watcher': false
+  unrs-resolver: false
+
+# Refuse to install when the running Node/pnpm does not satisfy `engines`.
+engineStrict: true
+
+# Dependencies are pinned to exact versions; upgrades are deliberate.
+saveExact: true

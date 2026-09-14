@@ -1,0 +1,23 @@
+{
+  "name": "@relayforge/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Code shared across RelayForge apps: webhook signing primitives and cross-app contracts",
+  "license": "MIT",
+  "exports": {
+    "./webhooks": {
+      "types": "./dist/webhooks/index.d.ts",
+      "default": "./dist/webhooks/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/jest": "30.0.0",
+    "jest": "30.5.1",
+    "ts-jest": "29.4.12"
+  }
+}
