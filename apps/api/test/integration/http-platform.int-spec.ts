@@ -76,6 +76,18 @@ describe('HTTP platform', () => {
 
       expect(response.headers['x-powered-by']).toBeUndefined();
     });
+
+    it('serves an OpenAPI document with bearer authentication and without health probes', async () => {
+      const response = await request(app.getHttpServer()).get('/docs-json').expect(200);
+      const document = response.body as {
+        paths: Record<string, unknown>;
+        components: { securitySchemes: Record<string, unknown> };
+      };
+
+      expect(document.paths).toHaveProperty(['/v1/api-keys']);
+      expect(Object.keys(document.paths).some((path) => path.startsWith('/health'))).toBe(false);
+      expect(document.components.securitySchemes).toHaveProperty('bearer');
+    });
   });
 
   describe('with Redis unavailable', () => {

@@ -1,8 +1,11 @@
 import { ConfigValidationError, loadConfig } from './app-config';
 
+const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+
 const REQUIRED = {
   DATABASE_URL: 'postgresql://user:pass@localhost:5432/relayforge',
   REDIS_URL: 'redis://localhost:6379',
+  ENCRYPTION_KEY,
 };
 
 describe('loadConfig', () => {
@@ -12,18 +15,26 @@ describe('loadConfig', () => {
     expect(config).toEqual({
       nodeEnv: 'development',
       logLevel: 'info',
-      http: { port: 3000, jsonBodyLimitBytes: 102_400 },
+      http: { port: 3000, jsonBodyLimitBytes: 102_400, swaggerEnabled: true },
       database: { url: REQUIRED.DATABASE_URL, poolMax: 10 },
       redis: { url: REQUIRED.REDIS_URL },
+      security: { encryptionKey: Buffer.alloc(32, 7) },
+      rateLimit: { windowMs: 60_000, managementMax: 300 },
       health: { checkTimeoutMs: 2_000 },
     });
   });
 
-  it('coerces numeric settings from strings', () => {
-    const config = loadConfig({ ...REQUIRED, HTTP_PORT: '8080', DATABASE_POOL_MAX: '25' });
+  it('coerces numeric and boolean settings from strings', () => {
+    const config = loadConfig({
+      ...REQUIRED,
+      HTTP_PORT: '8080',
+      DATABASE_POOL_MAX: '25',
+      SWAGGER_ENABLED: 'false',
+    });
 
     expect(config.http.port).toBe(8080);
     expect(config.database.poolMax).toBe(25);
+    expect(config.http.swaggerEnabled).toBe(false);
   });
 
   it('fails fast when required settings are missing', () => {
@@ -35,11 +46,27 @@ describe('loadConfig', () => {
     ['a non-redis URL', { REDIS_URL: 'http://localhost:6379' }],
     ['an out-of-range port', { HTTP_PORT: '70000' }],
     ['an unknown log level', { LOG_LEVEL: 'verbose' }],
+    ['an encryption key that is not base64', { ENCRYPTION_KEY: 'not base64!' }],
+    [
+      'an encryption key of the wrong length',
+      { ENCRYPTION_KEY: Buffer.alloc(16).toString('base64') },
+    ],
+    ['an ambiguous boolean', { SWAGGER_ENABLED: 'maybe' }],
   ])('rejects %s', (_label, override) => {
     expect(() => loadConfig({ ...REQUIRED, ...override })).toThrow(ConfigValidationError);
   });
 
-  it('names the offending setting in the error message', () => {
-    expect(() => loadConfig({ REDIS_URL: REQUIRED.REDIS_URL })).toThrow(/DATABASE_URL/);
+  it('names the offending setting without echoing secret values', () => {
+    const secretLookingValue = Buffer.alloc(16, 1).toString('base64');
+
+    let message = '';
+    try {
+      loadConfig({ ...REQUIRED, ENCRYPTION_KEY: secretLookingValue });
+    } catch (error: unknown) {
+      message = error instanceof Error ? error.message : '';
+    }
+
+    expect(message).toContain('ENCRYPTION_KEY');
+    expect(message).not.toContain(secretLookingValue);
   });
 });

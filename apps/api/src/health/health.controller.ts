@@ -1,7 +1,14 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
+import { Public } from '../auth/auth.decorators';
 import { HealthService, type ReadinessReport } from './health.service';
 
+/** Probes for orchestrators: unauthenticated, never rate limited. */
+@Public()
+@SkipThrottle()
+@ApiExcludeController()
 @Controller('health')
 export class HealthController {
   private readonly startedAt = Date.now();

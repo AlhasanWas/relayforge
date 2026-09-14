@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { type AppConfig, loadConfig } from '../../../src/config/app-config';
 
 export const TEST_DATABASE_URL =
@@ -20,6 +21,17 @@ export function assertDisposableTestDatabase(databaseUrl: string): void {
   }
 }
 
+/** Integration tests flush Redis. Refuse to flush logical database 0, the default. */
+export function assertDisposableTestRedis(redisUrl: string): void {
+  const databaseIndex = Number(new URL(redisUrl).pathname.slice(1) || '0');
+  if (databaseIndex === 0) {
+    throw new Error(
+      'Refusing to run integration tests against Redis database 0: ' +
+        'set TEST_REDIS_URL to a dedicated logical database, e.g. redis://localhost:6379/1.',
+    );
+  }
+}
+
 export function createTestConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
   return loadConfig({
     NODE_ENV: 'test',
@@ -27,6 +39,9 @@ export function createTestConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     DATABASE_URL: TEST_DATABASE_URL,
     DATABASE_POOL_MAX: '5',
     REDIS_URL: TEST_REDIS_URL,
+    ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+    // High enough that only tests about rate limiting ever reach it.
+    RATE_LIMIT_MANAGEMENT_MAX: '10000',
     HEALTH_CHECK_TIMEOUT_MS: '1000',
     ...overrides,
   });
