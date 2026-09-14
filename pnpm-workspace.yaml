@@ -6,10 +6,17 @@ packages:
 # ship prebuilt native binaries, so their scripts are not needed.
 allowBuilds:
   '@parcel/watcher': false
+  '@prisma/engines': true
+  esbuild: false
+  prisma: false
   unrs-resolver: false
 
 # Refuse to install when the running Node/pnpm does not satisfy `engines`.
 engineStrict: true
+
+# Newly published versions are not installable for 24 hours (supply-chain
+# quarantine). Do not add exclusions; pin an older patch instead.
+minimumReleaseAge: 1440
 
 # Dependencies are pinned to exact versions; upgrades are deliberate.
 saveExact: true
