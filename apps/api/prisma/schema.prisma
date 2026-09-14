@@ -1,0 +1,477 @@
+// RelayForge database schema.
+//
+// Invariants that Prisma cannot express (CHECK constraints, append-only and
+// immutability triggers, deferred ledger balance checks) live in the SQL of the
+// migrations under ./migrations and are covered by integration tests.
+//
+// Tenant ownership is a foreign-key fact: parents expose a composite
+// (id, workspace_id) key and children reference it, so a row can never point at
+// a parent that belongs to another workspace.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = "js"
+  // Partial indexes enforce delivery/replay uniqueness. Declaring them here keeps
+  // the schema the source of truth, so a later `migrate dev` cannot drop them as drift.
+  previewFeatures     = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy and access
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  apiKeys             ApiKey[]
+  providerConnections ProviderConnection[]
+  ledgerAccounts      LedgerAccount[]
+  webhookEndpoints    WebhookEndpoint[]
+  outboxMessages      OutboxMessage[]
+  auditLogs           AuditLog[]
+
+  @@map("workspaces")
+}
+
+enum ApiKeyRole {
+  ADMIN
+  MEMBER
+
+  @@map("api_key_role")
+}
+
+model ApiKey {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  name        String
+  role        ApiKeyRole
+  /// Non-secret identifier shown in UIs and logs, e.g. "rf_3kq9x2ab".
+  prefix      String     @unique
+  /// SHA-256 of the full key, hex encoded. The key itself is never stored.
+  keyHash     String     @unique @map("key_hash") @db.Char(64)
+  lastUsedAt  DateTime?  @map("last_used_at") @db.Timestamptz(3)
+  revokedAt   DateTime?  @map("revoked_at") @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([workspaceId, id(sort: Desc)])
+  @@map("api_keys")
+}
+
+model AuditLog {
+  id           String         @id @default(uuid(7)) @db.Uuid
+  workspaceId  String         @map("workspace_id") @db.Uuid
+  actorType    AuditActorType @map("actor_type")
+  actorId      String?        @map("actor_id")
+  /// Dotted action name, e.g. "api_key.revoked" or "delivery.replayed".
+  action       String
+  resourceType String         @map("resource_type")
+  resourceId   String         @map("resource_id")
+  metadata     Json
+  requestId    String?        @map("request_id")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([workspaceId, id(sort: Desc)])
+  @@map("audit_logs")
+}
+
+enum AuditActorType {
+  API_KEY
+  SYSTEM
+
+  @@map("audit_actor_type")
+}
+
+// ---------------------------------------------------------------------------
+// Providers and ingestion
+// ---------------------------------------------------------------------------
+
+enum ProviderAdapterType {
+  MOCKPAY
+
+  @@map("provider_adapter_type")
+}
+
+/// A provider RelayForge knows how to integrate with. Global, not tenant-owned.
+model ProviderDefinition {
+  id          String              @id @default(uuid(7)) @db.Uuid
+  slug        String              @unique
+  displayName String              @map("display_name")
+  adapterType ProviderAdapterType @map("adapter_type")
+  enabled     Boolean             @default(true)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  connections ProviderConnection[]
+
+  @@map("provider_definitions")
+}
+
+/// A workspace's own integration with a provider, with its own signing secret.
+model ProviderConnection {
+  id                     String   @id @default(uuid(7)) @db.Uuid
+  workspaceId            String   @map("workspace_id") @db.Uuid
+  providerDefinitionId   String   @map("provider_definition_id") @db.Uuid
+  name                   String
+  /// Routing identifier used in the ingestion URL. Not a credential.
+  publicIngressKey       String   @unique @map("public_ingress_key")
+  signingSecretEncrypted String   @map("signing_secret_encrypted")
+  /// Maximum webhook timestamp skew in seconds; null disables the check.
+  timestampToleranceSec  Int?     @map("timestamp_tolerance_sec")
+  enabled                Boolean  @default(true)
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  providerDefinition ProviderDefinition @relation(fields: [providerDefinitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  incomingEvents          IncomingEvent[]
+  rejectedWebhookAttempts RejectedWebhookAttempt[]
+  transactions            Transaction[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, id(sort: Desc)])
+  @@map("provider_connections")
+}
+
+enum IncomingEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+
+  @@map("incoming_event_status")
+}
+
+model IncomingEvent {
+  id                   String              @id @default(uuid(7)) @db.Uuid
+  workspaceId          String              @map("workspace_id") @db.Uuid
+  providerConnectionId String              @map("provider_connection_id") @db.Uuid
+  externalEventId      String              @map("external_event_id")
+  eventType            String              @map("event_type")
+  payload              Json
+  /// SHA-256 of the raw request body, hex encoded.
+  payloadHash          String              @map("payload_hash") @db.Char(64)
+  /// Always true: unverified requests are recorded as RejectedWebhookAttempt instead.
+  signatureValid       Boolean             @map("signature_valid")
+  status               IncomingEventStatus @default(RECEIVED)
+  processingAttempts   Int                 @default(0) @map("processing_attempts")
+  failureReason        String?             @map("failure_reason")
+  receivedAt           DateTime            @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt          DateTime?           @map("processed_at") @db.Timestamptz(3)
+
+  providerConnection ProviderConnection @relation(fields: [providerConnectionId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+
+  // Both are one-to-one in practice: the referencing columns carry their own UNIQUE constraint.
+  createdTransactions Transaction[]
+  ledgerTransactions  LedgerTransaction[]
+  deliveries          WebhookDelivery[]
+
+  @@unique([providerConnectionId, externalEventId])
+  @@unique([id, workspaceId])
+  @@index([workspaceId, id(sort: Desc)])
+  @@index([receivedAt], where: raw("status = 'RECEIVED'"))
+  @@map("incoming_events")
+}
+
+enum RejectionReason {
+  CONNECTION_DISABLED
+  MISSING_SIGNATURE_HEADERS
+  MALFORMED_SIGNATURE_HEADERS
+  INVALID_SIGNATURE
+  TIMESTAMP_OUTSIDE_TOLERANCE
+  INVALID_PAYLOAD
+  PAYLOAD_CONFLICT
+
+  @@map("rejection_reason")
+}
+
+/// Immutable security record of a request rejected for an identifiable connection.
+/// Never stores signatures, secrets or the request body.
+model RejectedWebhookAttempt {
+  id                   String          @id @default(uuid(7)) @db.Uuid
+  workspaceId          String          @map("workspace_id") @db.Uuid
+  providerConnectionId String          @map("provider_connection_id") @db.Uuid
+  reason               RejectionReason
+  payloadHash          String          @map("payload_hash") @db.Char(64)
+  bodyBytes            Int             @map("body_bytes")
+  requestId            String          @map("request_id")
+  sourceIp             String?         @map("source_ip")
+  metadata             Json
+  receivedAt           DateTime        @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  providerConnection ProviderConnection @relation(fields: [providerConnectionId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([workspaceId, id(sort: Desc)])
+  @@map("rejected_webhook_attempts")
+}
+
+// ---------------------------------------------------------------------------
+// Financial state
+// ---------------------------------------------------------------------------
+
+enum TransactionStatus {
+  SUCCEEDED
+  FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
+
+  @@map("transaction_status")
+}
+
+/// Domain view of a provider payment. Mutable; the ledger is its immutable history.
+model Transaction {
+  id                   String            @id @default(uuid(7)) @db.Uuid
+  workspaceId          String            @map("workspace_id") @db.Uuid
+  providerConnectionId String            @map("provider_connection_id") @db.Uuid
+  externalPaymentId    String            @map("external_payment_id")
+  status               TransactionStatus
+  currency             String            @db.Char(3)
+  amountMinor          BigInt            @map("amount_minor")
+  refundedAmountMinor  BigInt            @default(0) @map("refunded_amount_minor")
+  createdByEventId     String            @unique @map("created_by_event_id") @db.Uuid
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  providerConnection ProviderConnection @relation(fields: [providerConnectionId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+  createdByEvent     IncomingEvent      @relation(fields: [createdByEventId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+
+  ledgerTransactions LedgerTransaction[]
+
+  @@unique([providerConnectionId, externalPaymentId])
+  @@unique([id, workspaceId])
+  @@index([workspaceId, id(sort: Desc)])
+  @@map("transactions")
+}
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+
+  @@map("ledger_account_type")
+}
+
+model LedgerAccount {
+  id          String            @id @default(uuid(7)) @db.Uuid
+  workspaceId String            @map("workspace_id") @db.Uuid
+  code        String
+  type        LedgerAccountType
+  currency    String            @db.Char(3)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  postings LedgerPosting[]
+
+  @@unique([workspaceId, code, currency])
+  @@unique([id, workspaceId, currency])
+  @@map("ledger_accounts")
+}
+
+enum LedgerTransactionKind {
+  PAYMENT_CAPTURED
+  PAYMENT_REFUNDED
+
+  @@map("ledger_transaction_kind")
+}
+
+/// Journal entry header. Its postings must balance (enforced at COMMIT).
+model LedgerTransaction {
+  id                  String                @id @default(uuid(7)) @db.Uuid
+  workspaceId         String                @map("workspace_id") @db.Uuid
+  transactionId       String                @map("transaction_id") @db.Uuid
+  sourceEventId       String                @unique @map("source_event_id") @db.Uuid
+  kind                LedgerTransactionKind
+  /// Provider payment id or refund id this journal records.
+  externalReferenceId String                @map("external_reference_id")
+  currency            String                @db.Char(3)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  transaction Transaction   @relation(fields: [transactionId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+  sourceEvent IncomingEvent @relation(fields: [sourceEventId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+
+  postings LedgerPosting[]
+
+  @@unique([transactionId, kind, externalReferenceId])
+  @@unique([id, workspaceId, currency])
+  @@index([workspaceId, id(sort: Desc)])
+  @@map("ledger_transactions")
+}
+
+enum PostingDirection {
+  DEBIT
+  CREDIT
+
+  @@map("posting_direction")
+}
+
+model LedgerPosting {
+  id                  String           @id @default(uuid(7)) @db.Uuid
+  workspaceId         String           @map("workspace_id") @db.Uuid
+  ledgerTransactionId String           @map("ledger_transaction_id") @db.Uuid
+  accountId           String           @map("account_id") @db.Uuid
+  direction           PostingDirection
+  amountMinor         BigInt           @map("amount_minor")
+  currency            String           @db.Char(3)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // Composite keys make currency consistency structural: a posting's currency
+  // must equal both its journal's currency and its account's currency.
+  ledgerTransaction LedgerTransaction @relation(fields: [ledgerTransactionId, workspaceId, currency], references: [id, workspaceId, currency], onDelete: Restrict, onUpdate: Restrict)
+  account           LedgerAccount     @relation(fields: [accountId, workspaceId, currency], references: [id, workspaceId, currency], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([ledgerTransactionId])
+  @@index([accountId])
+  @@map("ledger_postings")
+}
+
+// ---------------------------------------------------------------------------
+// Outgoing webhooks
+// ---------------------------------------------------------------------------
+
+model WebhookEndpoint {
+  id                     String    @id @default(uuid(7)) @db.Uuid
+  workspaceId            String    @map("workspace_id") @db.Uuid
+  url                    String
+  description            String?
+  eventTypes             String[]  @map("event_types")
+  signingSecretEncrypted String    @map("signing_secret_encrypted")
+  isActive               Boolean   @default(true) @map("is_active")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt              DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  deliveries WebhookDelivery[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, id(sort: Desc)])
+  @@map("webhook_endpoints")
+}
+
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  DEAD_LETTER
+
+  @@map("delivery_status")
+}
+
+enum DeadLetterReason {
+  MAX_ATTEMPTS_EXHAUSTED
+  NON_RETRYABLE_RESPONSE
+  ENDPOINT_UNAVAILABLE
+
+  @@map("dead_letter_reason")
+}
+
+model WebhookDelivery {
+  id                 String            @id @default(uuid(7)) @db.Uuid
+  workspaceId        String            @map("workspace_id") @db.Uuid
+  eventId            String            @map("event_id") @db.Uuid
+  endpointId         String            @map("endpoint_id") @db.Uuid
+  replayOfDeliveryId String?           @map("replay_of_delivery_id") @db.Uuid
+  payload            Json
+  status             DeliveryStatus    @default(PENDING)
+  attemptCount       Int               @default(0) @map("attempt_count")
+  /// Snapshot of the retry budget at creation; config changes do not affect it.
+  maxAttempts        Int               @map("max_attempts")
+  nextAttemptAt      DateTime?         @map("next_attempt_at") @db.Timestamptz(3)
+  leaseOwner         String?           @map("lease_owner")
+  leaseExpiresAt     DateTime?         @map("lease_expires_at") @db.Timestamptz(3)
+  deliveredAt        DateTime?         @map("delivered_at") @db.Timestamptz(3)
+  deadLetteredAt     DateTime?         @map("dead_lettered_at") @db.Timestamptz(3)
+  deadLetterReason   DeadLetterReason? @map("dead_letter_reason")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  event    IncomingEvent     @relation(fields: [eventId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+  endpoint WebhookEndpoint   @relation(fields: [endpointId, workspaceId], references: [id, workspaceId], onDelete: Restrict, onUpdate: Restrict)
+  replayOf WebhookDelivery?  @relation("DeliveryReplay", fields: [replayOfDeliveryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replays  WebhookDelivery[] @relation("DeliveryReplay")
+  attempts DeliveryAttempt[]
+
+  /// One original delivery per event and endpoint; replays are separate rows.
+  @@unique([eventId, endpointId], map: "webhook_deliveries_original_key", where: raw("replay_of_delivery_id IS NULL"))
+  /// At most one in-progress replay of any given delivery.
+  @@unique([replayOfDeliveryId], map: "webhook_deliveries_active_replay_key", where: raw("status = 'PENDING' OR status = 'PROCESSING'"))
+  @@index([workspaceId, id(sort: Desc)])
+  @@index([workspaceId, status, id(sort: Desc)])
+  @@index([nextAttemptAt], where: raw("status = 'PENDING'"))
+  @@index([leaseExpiresAt], where: raw("status = 'PROCESSING'"))
+  @@map("webhook_deliveries")
+}
+
+enum AttemptOutcome {
+  SUCCESS
+  RETRYABLE_FAILURE
+  PERMANENT_FAILURE
+  /// The worker lost its lease before recording a result; the receiver may or may not have it.
+  UNKNOWN
+
+  @@map("attempt_outcome")
+}
+
+model DeliveryAttempt {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  deliveryId     String         @map("delivery_id") @db.Uuid
+  attemptNumber  Int            @map("attempt_number")
+  outcome        AttemptOutcome
+  responseStatus Int?           @map("response_status")
+  /// TIMEOUT | NETWORK_ERROR | BLOCKED_DESTINATION | LEASE_EXPIRED | ...
+  errorCode      String?        @map("error_code")
+  errorMessage   String?        @map("error_message")
+  /// First 2 KiB of the response body.
+  responseBody   String?        @map("response_body")
+  durationMs     Int?           @map("duration_ms")
+  startedAt      DateTime?      @map("started_at") @db.Timestamptz(3)
+  recordedAt     DateTime       @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  delivery WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([deliveryId, attemptNumber])
+  @@map("delivery_attempts")
+}
+
+// ---------------------------------------------------------------------------
+// Transactional outbox
+// ---------------------------------------------------------------------------
+
+enum OutboxTopic {
+  EVENT_PROCESSING_REQUESTED
+  WEBHOOK_DELIVERY_REQUESTED
+
+  @@map("outbox_topic")
+}
+
+model OutboxMessage {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  workspaceId     String      @map("workspace_id") @db.Uuid
+  topic           OutboxTopic
+  aggregateId     String      @map("aggregate_id") @db.Uuid
+  availableAt     DateTime    @map("available_at") @db.Timestamptz(3)
+  publishAttempts Int         @default(0) @map("publish_attempts")
+  leaseOwner      String?     @map("lease_owner")
+  leaseExpiresAt  DateTime?   @map("lease_expires_at") @db.Timestamptz(3)
+  lastError       String?     @map("last_error")
+  publishedAt     DateTime?   @map("published_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([availableAt], map: "outbox_messages_unpublished_idx", where: raw("published_at IS NULL"))
+  @@index([aggregateId])
+  @@index([publishedAt], map: "outbox_messages_published_idx", where: raw("published_at IS NOT NULL"))
+  @@map("outbox_messages")
+}

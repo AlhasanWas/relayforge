@@ -6,7 +6,13 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/.next/**', '**/coverage/**', '**/node_modules/**'],
+    ignores: [
+      '**/dist/**',
+      '**/.next/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      '**/src/generated/**',
+    ],
   },
   eslint.configs.recommended,
   {
