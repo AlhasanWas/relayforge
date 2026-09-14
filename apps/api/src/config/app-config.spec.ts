@@ -15,11 +15,12 @@ describe('loadConfig', () => {
     expect(config).toEqual({
       nodeEnv: 'development',
       logLevel: 'info',
-      http: { port: 3000, jsonBodyLimitBytes: 102_400, swaggerEnabled: true },
+      http: { port: 3000, jsonBodyLimitBytes: 102_400, swaggerEnabled: true, trustProxyHops: 0 },
+      ingestion: { maxBodyBytes: 1_048_576 },
       database: { url: REQUIRED.DATABASE_URL, poolMax: 10 },
       redis: { url: REQUIRED.REDIS_URL },
       security: { encryptionKey: Buffer.alloc(32, 7) },
-      rateLimit: { windowMs: 60_000, managementMax: 300 },
+      rateLimit: { windowMs: 60_000, managementMax: 300, ingestionMax: 1_200 },
       health: { checkTimeoutMs: 2_000 },
     });
   });

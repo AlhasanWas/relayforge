@@ -15,6 +15,8 @@ const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HTTP_PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   HTTP_JSON_BODY_LIMIT_BYTES: z.coerce.number().int().positive().default(102_400),
+  HTTP_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+  INGESTION_MAX_BODY_BYTES: z.coerce.number().int().positive().default(1_048_576),
   SWAGGER_ENABLED: z.stringbool().default(true),
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
@@ -23,6 +25,7 @@ const environmentSchema = z.object({
   ENCRYPTION_KEY: encryptionKeySchema,
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MANAGEMENT_MAX: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_INGESTION_MAX: z.coerce.number().int().positive().default(1_200),
   HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(2_000),
 });
 
@@ -33,6 +36,14 @@ export interface AppConfig {
     readonly port: number;
     readonly jsonBodyLimitBytes: number;
     readonly swaggerEnabled: boolean;
+    /**
+     * Number of reverse proxies in front of the API whose X-Forwarded-For entries are
+     * trusted for the client IP. 0 (default) trusts none and uses the socket address.
+     */
+    readonly trustProxyHops: number;
+  };
+  readonly ingestion: {
+    readonly maxBodyBytes: number;
   };
   readonly database: {
     readonly url: string;
@@ -49,6 +60,8 @@ export interface AppConfig {
     readonly windowMs: number;
     /** Requests allowed per API key per window across the management API. */
     readonly managementMax: number;
+    /** Requests allowed per ingress key and client IP per window. */
+    readonly ingestionMax: number;
   };
   readonly health: {
     readonly checkTimeoutMs: number;
@@ -77,6 +90,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
       port: env.HTTP_PORT,
       jsonBodyLimitBytes: env.HTTP_JSON_BODY_LIMIT_BYTES,
       swaggerEnabled: env.SWAGGER_ENABLED,
+      trustProxyHops: env.HTTP_TRUST_PROXY_HOPS,
+    },
+    ingestion: {
+      maxBodyBytes: env.INGESTION_MAX_BODY_BYTES,
     },
     database: {
       url: env.DATABASE_URL,
@@ -91,6 +108,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     rateLimit: {
       windowMs: env.RATE_LIMIT_WINDOW_MS,
       managementMax: env.RATE_LIMIT_MANAGEMENT_MAX,
+      ingestionMax: env.RATE_LIMIT_INGESTION_MAX,
     },
     health: {
       checkTimeoutMs: env.HEALTH_CHECK_TIMEOUT_MS,

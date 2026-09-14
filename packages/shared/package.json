@@ -8,6 +8,10 @@
     "./webhooks": {
       "types": "./dist/webhooks/index.d.ts",
       "default": "./dist/webhooks/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "default": "./dist/providers/index.js"
     }
   },
   "scripts": {
@@ -19,5 +23,8 @@
     "@types/jest": "30.0.0",
     "jest": "30.5.1",
     "ts-jest": "29.4.12"
+  },
+  "dependencies": {
+    "zod": "4.5.4"
   }
 }

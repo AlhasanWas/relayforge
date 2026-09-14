@@ -21,7 +21,8 @@ export const REDACTED_LOG_PATHS = [
 ];
 
 /**
- * Consumers inject `PinoLogger` and call `setContext()` in their constructor.
+ * Consumers inject `PinoLogger` and call `setContext()` in their constructor. Inside
+ * an HTTP request the logger already carries `requestId`; do not add it again.
  * `@InjectPinoLogger()` is deliberately not used: it registers providers as an
  * import side effect, which makes module wiring depend on file import order.
  */

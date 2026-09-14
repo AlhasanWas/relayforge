@@ -8,9 +8,12 @@ import { ClockModule } from './clock/clock.module';
 import { ConfigModule } from './config/config.module';
 import { CryptoModule } from './crypto/crypto.module';
 import { DatabaseModule } from './database/database.module';
+import { EventsModule } from './events/events.module';
 import { GlobalExceptionFilter } from './errors/global-exception.filter';
 import { HealthModule } from './health/health.module';
+import { IngestionModule } from './ingestion/ingestion.module';
 import { LoggingModule } from './logging/logging.module';
+import { ProvidersModule } from './providers/providers.module';
 import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RedisModule } from './redis/redis.module';
@@ -28,6 +31,9 @@ import { RedisModule } from './redis/redis.module';
     RateLimitModule,
     HealthModule,
     ApiKeysModule,
+    ProvidersModule,
+    IngestionModule,
+    EventsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },

@@ -7,8 +7,8 @@ import { configureHttpApp } from './http/configure-http-app';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
-    // Webhook signatures are verified over the exact received bytes.
-    rawBody: true,
+    // Body parsers are registered per route family in configureHttpApp.
+    bodyParser: false,
   });
   const config = app.get<AppConfig>(APP_CONFIG);
   configureHttpApp(app, config);
