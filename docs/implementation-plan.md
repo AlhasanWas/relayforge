@@ -86,16 +86,16 @@ only line of defence.
 
 ### 2.2 Ingestion
 
-| #   | Invariant                                                                                           | Enforcement                                                                             |
-| --- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| I1  | At most one `IncomingEvent` per `(provider_connection_id, external_event_id)`                       | `UNIQUE` + `INSERT … ON CONFLICT DO NOTHING`                                            |
-| I2  | Only signature-verified, schema-valid requests create an `IncomingEvent`                            | Verification and validation before insert; `CHECK (signature_valid)`                    |
-| I3  | Rejected requests never participate in business idempotency                                         | Stored in separate `rejected_webhook_attempts` table with no uniqueness on external ids |
-| I4  | Stored event identity and payload are immutable; events are never deleted                           | `BEFORE UPDATE` trigger guarding identity/payload columns; `BEFORE DELETE` trigger      |
-| I5  | Same external id with a different payload is rejected, never merged                                 | `payload_hash` comparison → `409`, recorded as a rejected attempt                       |
-| I6  | Accepting an event and requesting its processing are atomic                                         | `IncomingEvent` + `OutboxMessage` inserted in one transaction                           |
-| I7  | Rejected attempts are immutable and contain no secrets or raw payloads                              | Append-only trigger; only hash, reason, request metadata stored                         |
-| I8  | Status metadata is consistent (`PROCESSED`/`IGNORED` ⇒ `processed_at`; `FAILED` ⇒ `failure_reason`) | `CHECK` constraints                                                                     |
+| #   | Invariant                                                                                                               | Enforcement                                                                             |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| I1  | At most one `IncomingEvent` per `(provider_connection_id, external_event_id)`                                           | `UNIQUE` + `INSERT … ON CONFLICT DO NOTHING`                                            |
+| I2  | Only signature-verified, schema-valid requests create an `IncomingEvent`                                                | Verification and validation before insert; `CHECK (signature_valid)`                    |
+| I3  | Rejected requests never participate in business idempotency                                                             | Stored in separate `rejected_webhook_attempts` table with no uniqueness on external ids |
+| I4  | Stored event identity and payload are immutable; events are never deleted                                               | `BEFORE UPDATE` trigger guarding identity/payload columns; `BEFORE DELETE` trigger      |
+| I5  | Same external id with a different payload is rejected, never merged                                                     | `payload_hash` comparison → `409`, recorded as a rejected attempt                       |
+| I6  | Accepting an event and requesting its processing are atomic                                                             | `IncomingEvent` + `OutboxMessage` inserted in one transaction                           |
+| I7  | Rejected attempts are immutable and contain no secrets or raw payloads                                                  | Append-only trigger; only hash, reason, request metadata stored                         |
+| I8  | Status metadata is consistent (final status ⇔ `processed_at`; `FAILED` ⇔ `failure_reason`); final statuses never change | `CHECK` constraints; `BEFORE UPDATE` trigger                                            |
 
 ### 2.3 Financial state (domain + double-entry ledger)
 
@@ -787,26 +787,49 @@ Rules:
   version that `typescript-eslint`, `ts-jest`, the Nest CLI, Prisma and Next.js all
   support. The TypeScript 7 native compiler is excluded.
 - **Package manager pinned via Corepack** (`packageManager` field).
+- **24-hour release quarantine** — `minimumReleaseAge: 1440` in `pnpm-workspace.yaml`.
+  A version published in the last day is not installed; an older patch is pinned
+  instead of adding an exclusion.
+- **Install scripts denied by default** — only `@prisma/engines` (downloads the
+  schema engine used by `prisma migrate`) is allowed to run one.
 - Exact versions and the reasons for any held-back package are recorded below.
   Packages introduced in later phases are pinned to the listed line at that time.
 
 Registry state checked on 2026-09-14.
 
-| Component                  | Pinned                               | Why this version                                                                                                                                                                                                                                                      |
-| -------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js                    | 24.21.0 (LTS "Krypton")              | Active LTS. Node 25 is a non-LTS release.                                                                                                                                                                                                                             |
-| pnpm                       | 11.26.0 via Corepack                 | Mature major. 12.0.0 shipped 2026-08-26, less than three weeks earlier.                                                                                                                                                                                               |
-| TypeScript                 | 6.0.3                                | npm `latest` is 7.x, the native compiler: excluded. `typescript-eslint` 8.70 supports `<6.1.0`; `ts-jest` supports `<7`.                                                                                                                                              |
-| ESLint / typescript-eslint | 10.10.0 / 8.70.0                     | Peer ranges verified against `eslint-plugin-react-hooks` and `eslint-config-prettier` for the dashboard.                                                                                                                                                              |
-| Prettier                   | 3.9.6                                | Latest stable.                                                                                                                                                                                                                                                        |
-| Jest / ts-jest             | 30.5.1 / 29.4.12                     | ts-jest peer range covers Jest 30 and TypeScript 6.                                                                                                                                                                                                                   |
-| NestJS                     | 11.2.x (latest patch)                | **Held back.** 12.0.0 (2026-08-27) is ESM-only, and Jest's ESM mode still requires `--experimental-vm-modules`; `@nestjs/throttler` has no Nest 12 release. The 11.x line is actively patched (11.2.4 published 2026-09-14). Revisit when Jest ESM support is stable. |
-| Prisma                     | 7.10.0                               | npm `latest` currently points at `8.0.0-rc.15`, a release candidate: excluded.                                                                                                                                                                                        |
-| BullMQ                     | 5.81.x                               | **Held back.** 6.0.0 (2026-07-30) changed the Redis client model (ioredis no longer bundled). 5.x is actively maintained (5.81.5 published 2026-09-10).                                                                                                               |
-| PostgreSQL                 | 17 (image major)                     | Mature major; nothing in the design needs 18-only features.                                                                                                                                                                                                           |
-| Redis                      | 7.4 (image minor)                    | Conservative, BullMQ-supported; run with `noeviction` and AOF.                                                                                                                                                                                                        |
-| Next.js / React / Tailwind | 16.3.x / 19.3.x / 4.3.x              | Current stable lines; confirmed in Phase 8.                                                                                                                                                                                                                           |
-| GitHub Actions             | checkout v7, setup-node v7, cache v6 | Current major tags.                                                                                                                                                                                                                                                   |
+| Component                  | Pinned                               | Why this version                                                                                                                                                                                                                                        |
+| -------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js                    | 24.21.0 (LTS "Krypton")              | Active LTS. Node 25 is a non-LTS release.                                                                                                                                                                                                               |
+| pnpm                       | 11.26.0 via Corepack                 | Mature major. 12.0.0 shipped 2026-08-26, less than three weeks earlier.                                                                                                                                                                                 |
+| TypeScript                 | 6.0.3                                | npm `latest` is 7.x, the native compiler: excluded. `typescript-eslint` 8.70 supports `<6.1.0`; `ts-jest` supports `<7`.                                                                                                                                |
+| ESLint / typescript-eslint | 10.10.0 / 8.70.0                     | Peer ranges verified against `eslint-plugin-react-hooks` and `eslint-config-prettier` for the dashboard.                                                                                                                                                |
+| Prettier                   | 3.9.6                                | Latest stable.                                                                                                                                                                                                                                          |
+| Jest / ts-jest             | 30.5.1 / 29.4.12                     | ts-jest peer range covers Jest 30 and TypeScript 6.                                                                                                                                                                                                     |
+| NestJS                     | 11.2.3                               | **Held back.** 12.0.0 (2026-08-27) is ESM-only, and Jest's ESM mode still requires `--experimental-vm-modules`; `@nestjs/throttler` has no Nest 12 release. The 11.x line is actively patched; 11.2.4 was inside the release quarantine when installed. |
+| zod                        | 4.5.4                                | The 4.6 minor was five days old with a new patch almost daily; the settled 4.5 line is used.                                                                                                                                                            |
+| Prisma                     | 7.10.0                               | npm `latest` currently points at `8.0.0-rc.15`, a release candidate: excluded.                                                                                                                                                                          |
+| BullMQ                     | 5.81.x                               | **Held back.** 6.0.0 (2026-07-30) changed the Redis client model (ioredis no longer bundled). 5.x is actively maintained (5.81.5 published 2026-09-10).                                                                                                 |
+| PostgreSQL                 | 17 (image major)                     | Mature major; nothing in the design needs 18-only features.                                                                                                                                                                                             |
+| Redis                      | 7.4 (image minor)                    | Conservative, BullMQ-supported; run with `noeviction` and AOF.                                                                                                                                                                                          |
+| Next.js / React / Tailwind | 16.3.x / 19.3.x / 4.3.x              | Current stable lines; confirmed in Phase 8.                                                                                                                                                                                                             |
+| GitHub Actions             | checkout v7, setup-node v7, cache v6 | Current major tags.                                                                                                                                                                                                                                     |
+
+### 10.1 Deliberate, scoped exceptions
+
+- **Prisma `partialIndexes` preview flag** (a flag in the stable 7.10 release, not a
+  prerelease). Partial unique indexes enforce "one original delivery per event and
+  endpoint" and "one active replay per delivery". Declaring them in `schema.prisma`
+  keeps the schema the source of truth; hand-written SQL indexes would be reported
+  as drift and dropped by the next `prisma migrate dev`. CI runs
+  `prisma migrate diff --exit-code` against a freshly migrated database, and the
+  integration tests fail if either index is missing.
+- **`--experimental-vm-modules` for integration tests only.** The Prisma 7 client
+  loads its WASM query compiler with a dynamic `import()`, which Node supports
+  natively in CommonJS but Jest's VM sandbox does not without this flag. Tests
+  still run as CommonJS: the flag enables dynamic `import()` in the sandbox and
+  nothing else. Production code never runs with it; the compiled API is verified
+  to boot under plain Node. This is narrower than adopting Jest's ESM mode, which
+  was the reason NestJS 12 was held back.
 
 ---
 
