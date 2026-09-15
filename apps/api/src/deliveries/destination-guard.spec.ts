@@ -19,6 +19,17 @@ describe('isBlockedAddress', () => {
     'fe80::1',
     '::ffff:127.0.0.1',
     '::ffff:10.0.0.1',
+    '::ffff:7f00:1',
+    '::7f00:1',
+    '64:ff9b::7f00:1',
+    '64:ff9b:1::a00:1',
+    '2002:7f00:1::1',
+    '2001:0:4136:e378:8000:63bf:3fff:fdd2',
+    'fec0::1',
+    '2001:db8::1',
+    '192.0.2.1',
+    '198.51.100.7',
+    '203.0.113.9',
   ])('blocks %s', (address) => {
     expect(isBlockedAddress(address)).toBe(true);
   });
