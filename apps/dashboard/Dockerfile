@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build context: repository root.
+# Build context: repository root (the dashboard depends on the shared workspace package).
 
 ARG NODE_VERSION=24.21.0
 
@@ -8,8 +8,10 @@ FROM node:${NODE_VERSION}-bookworm-slim AS build
 ARG PNPM_FETCH_TIMEOUT_MS=300000
 ARG PNPM_FETCH_RETRIES=5
 ENV PNPM_HOME=/pnpm \
+    COREPACK_HOME=/corepack \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true \
+    NEXT_TELEMETRY_DISABLED=1 \
     pnpm_config_cache_dir=/pnpm/cache \
     pnpm_config_fetch_timeout=${PNPM_FETCH_TIMEOUT_MS} \
     pnpm_config_fetch_retries=${PNPM_FETCH_RETRIES}
@@ -23,15 +25,21 @@ COPY apps/dashboard/package.json apps/dashboard/
 COPY apps/webhook-sink/package.json apps/webhook-sink/
 RUN --mount=type=cache,id=relayforge-pnpm-store,target=/pnpm/store \
     --mount=type=cache,id=relayforge-pnpm-cache,target=/pnpm/cache \
-    pnpm install --frozen-lockfile --filter @relayforge/webhook-sink
-COPY apps/webhook-sink apps/webhook-sink
-RUN pnpm --filter @relayforge/webhook-sink build
+    pnpm install --frozen-lockfile --filter "@relayforge/dashboard..."
+COPY packages/shared packages/shared
+COPY apps/dashboard apps/dashboard
+RUN pnpm --filter @relayforge/shared build \
+ && pnpm --filter @relayforge/dashboard build
 
-# The sink has no runtime dependencies: compiled JavaScript on plain Node.
+# Next.js standalone output: a traced server with only the files it needs.
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3001
 WORKDIR /app
-COPY --from=build --chown=node:node /repo/apps/webhook-sink/dist ./dist
+COPY --from=build --chown=node:node /repo/apps/dashboard/.next/standalone ./
+COPY --from=build --chown=node:node /repo/apps/dashboard/.next/static ./apps/dashboard/.next/static
 USER node
-EXPOSE 4000
-CMD ["node", "dist/main.js"]
+EXPOSE 3001
+CMD ["node", "apps/dashboard/server.js"]

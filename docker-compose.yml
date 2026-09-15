@@ -22,7 +22,9 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      # Over TCP: during first-time initialisation the entrypoint runs a temporary
+      # server that only listens on the unix socket, which must not count as ready.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -117,6 +119,32 @@ services:
         - node
         - -e
         - "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    init: true
+    environment:
+      RELAYFORGE_API_URL: http://api:3000
+      # Held only by the dashboard server process.
+      DASHBOARD_API_KEY: ${DASHBOARD_API_KEY:?DASHBOARD_API_KEY must be set in .env}
+    ports:
+      # Published on localhost only: the dashboard acts with an admin key and has no login.
+      - '127.0.0.1:${DASHBOARD_PORT:-3001}:3001'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 6

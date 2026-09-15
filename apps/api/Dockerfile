@@ -14,6 +14,11 @@ ENV PNPM_HOME=/pnpm \
     pnpm_config_cache_dir=/pnpm/cache \
     pnpm_config_fetch_timeout=${PNPM_FETCH_TIMEOUT_MS} \
     pnpm_config_fetch_retries=${PNPM_FETCH_RETRIES}
+# Prisma selects its engine binaries by the OpenSSL version found at install time,
+# and the slim image has none; install it before dependencies so they match.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && mkdir -p "$COREPACK_HOME" && chmod 0777 "$COREPACK_HOME"
 WORKDIR /repo
 
@@ -23,6 +28,7 @@ FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
+COPY apps/dashboard/package.json apps/dashboard/
 COPY apps/webhook-sink/package.json apps/webhook-sink/
 RUN --mount=type=cache,id=relayforge-pnpm-store,target=/pnpm/store \
     --mount=type=cache,id=relayforge-pnpm-cache,target=/pnpm/cache \
