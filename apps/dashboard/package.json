@@ -5,11 +5,10 @@
   "description": "Operator dashboard for the RelayForge demo workspace",
   "license": "MIT",
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "next dev --hostname 127.0.0.1 --port 3001",
     "build": "next build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "jest",
-    "start": "next start --port 3001"
+    "test": "jest"
   },
   "dependencies": {
     "@relayforge/shared": "workspace:*",
