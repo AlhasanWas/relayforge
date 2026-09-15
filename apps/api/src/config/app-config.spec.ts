@@ -21,6 +21,23 @@ describe('loadConfig', () => {
       redis: { url: REQUIRED.REDIS_URL },
       security: { encryptionKey: Buffer.alloc(32, 7) },
       rateLimit: { windowMs: 60_000, managementMax: 300, ingestionMax: 1_200 },
+      worker: { autostart: true },
+      outbox: {
+        pollIntervalMs: 500,
+        batchSize: 100,
+        leaseMs: 30_000,
+        publishTimeoutMs: 5_000,
+        retryBaseMs: 1_000,
+        retryMaxMs: 60_000,
+      },
+      eventProcessing: {
+        concurrency: 5,
+        maxAttempts: 10,
+        retryBaseMs: 5_000,
+        retryMaxMs: 600_000,
+      },
+      delivery: { maxAttempts: 8 },
+      endpoints: { allowHttp: false },
       health: { checkTimeoutMs: 2_000 },
     });
   });

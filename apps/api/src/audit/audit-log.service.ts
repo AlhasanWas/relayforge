@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type { Principal } from '../auth/principal';
 import { AuditActorType, type Prisma } from '../generated/prisma/client';
 
-export type AuditAction = 'api_key.created' | 'api_key.revoked';
+export type AuditAction =
+  | 'api_key.created'
+  | 'api_key.revoked'
+  | 'endpoint.created'
+  | 'endpoint.updated'
+  | 'endpoint.deleted';
 
 export interface AuditEntry {
   readonly workspaceId: string;

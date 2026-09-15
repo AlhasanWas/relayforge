@@ -12,7 +12,8 @@
     "test:integration": "node --experimental-vm-modules --disable-warning=ExperimentalWarning --env-file-if-exists=../../.env ./node_modules/jest/bin/jest.js --config jest.integration.config.js --runInBand",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:check-drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code"
+    "db:check-drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
+    "start:worker": "node --env-file-if-exists=../../.env dist/worker.js"
   },
   "dependencies": {
     "@nestjs/common": "11.2.3",
@@ -23,6 +24,7 @@
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "@relayforge/shared": "workspace:*",
+    "bullmq": "5.81.5",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
     "express": "5.2.1",

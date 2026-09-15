@@ -1,5 +1,6 @@
 import type { PayloadIssue } from '@relayforge/shared/providers';
 import type { ProviderAdapterType } from '../generated/prisma/client';
+import type { NormalizedEvent } from './payment-event';
 import type { WebhookSignatureVerifier } from './webhook-signature-verifier';
 
 /** Provider-neutral view of an authenticated, schema-valid webhook. */
@@ -28,4 +29,6 @@ export interface ProviderAdapter {
   readonly diagnosticHeaderNames: readonly string[];
   /** Validates an authenticated body. Only called after signature verification passed. */
   parsePayload(rawBody: Buffer, signedMessageId: string | null): ProviderPayloadResult;
+  /** Maps a stored payload to provider-neutral facts for processing. */
+  normalizeEvent(payload: unknown): NormalizedEvent;
 }

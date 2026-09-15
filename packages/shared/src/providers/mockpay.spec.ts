@@ -1,4 +1,4 @@
-import { parseMockPayEvent } from './mockpay';
+import { parseMockPayEvent, parseMockPayEventValue } from './mockpay';
 
 const succeeded = {
   id: 'evt_1',
@@ -21,6 +21,7 @@ describe('parseMockPayEvent', () => {
         type: 'payment.succeeded',
         createdAt: '2026-09-15T10:00:00Z',
         data: { payment_id: 'pay_1', amount: 1999, currency: 'USD', customer_id: 'cus_1' },
+        known: true,
       },
     });
   });
@@ -100,5 +101,13 @@ describe('parseMockPayEvent', () => {
     );
 
     expect(JSON.stringify(result)).not.toContain('secret-looking-value');
+  });
+});
+
+describe('parseMockPayEventValue', () => {
+  it('validates an already-parsed value the same way as a raw body', () => {
+    const stored: unknown = JSON.parse(body(succeeded));
+
+    expect(parseMockPayEventValue(stored)).toEqual(parseMockPayEvent(body(succeeded)));
   });
 });

@@ -59,12 +59,20 @@ interface EventBase {
   createdAt: string;
 }
 
-export type MockPayEvent =
+/** A validated event of a type RelayForge processes. Discriminated by `type`. */
+export type KnownMockPayEvent =
   | (EventBase & { type: 'payment.succeeded'; data: z.infer<typeof paymentSucceededData> })
   | (EventBase & { type: 'payment.failed'; data: z.infer<typeof paymentFailedData> })
-  | (EventBase & { type: 'payment.refunded'; data: z.infer<typeof paymentRefundedData> })
+  | (EventBase & { type: 'payment.refunded'; data: z.infer<typeof paymentRefundedData> });
+
+/**
+ * `known` is the discriminant: an unknown event's `type` is an arbitrary string that
+ * could otherwise overlap with the known literals and defeat narrowing.
+ */
+export type MockPayEvent =
+  | (KnownMockPayEvent & { known: true })
   /** A well-formed event of a type RelayForge does not process. */
-  | (EventBase & { type: string & {}; data: Record<string, unknown>; known: false });
+  | (EventBase & { known: false; type: string; data: Record<string, unknown> });
 
 export interface PayloadIssue {
   /** Dotted path to the offending field, e.g. `data.amount`. Never contains values. */
@@ -90,7 +98,11 @@ export function parseMockPayEvent(rawBody: string | Uint8Array): MockPayParseRes
   } catch {
     return { ok: false, issues: [{ path: '', message: 'Body is not valid JSON' }] };
   }
+  return parseMockPayEventValue(json);
+}
 
+/** Validates an already-parsed MockPay event, such as a payload loaded from storage. */
+export function parseMockPayEventValue(json: unknown): MockPayParseResult {
   const envelope = envelopeSchema.safeParse(json);
   if (!envelope.success) {
     return { ok: false, issues: toIssues(envelope.error) };
@@ -109,7 +121,7 @@ export function parseMockPayEvent(rawBody: string | Uint8Array): MockPayParseRes
   return {
     ok: true,
     json: body,
-    event: { id, type, createdAt, data: parsedData.data } as MockPayEvent,
+    event: { id, type, createdAt, data: parsedData.data, known: true } as MockPayEvent,
   };
 }
 

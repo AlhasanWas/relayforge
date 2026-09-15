@@ -254,7 +254,7 @@ describe('webhook ingestion', () => {
 
     it('rejects an authenticated but schema-invalid payload with issue paths and no values', async () => {
       const invalid = paymentSucceeded({
-        data: { payment_id: 'pay_1', amount: -5, currency: 'USD' },
+        data: { payment_id: 'pay_1', amount: -987_654_321, currency: 'USD' },
       });
 
       const response = await send(signed(invalid)).expect(422);
@@ -267,7 +267,7 @@ describe('webhook ingestion', () => {
       });
       const [attempt] = await rejectedAttempts();
       expect(attempt?.reason).toBe('INVALID_PAYLOAD');
-      expect(JSON.stringify(attempt?.metadata)).not.toContain('-5');
+      expect(JSON.stringify(attempt?.metadata)).not.toContain('987654321');
     });
 
     it('rejects authenticated bytes that are not JSON', async () => {

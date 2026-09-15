@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { PinoLogger } from 'nestjs-pino';
+import { withTimeout } from '../common/with-timeout';
 import { APP_CONFIG, type AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 import { REDIS } from '../redis/redis.module';
@@ -47,7 +48,7 @@ export class HealthService {
   private async probe(name: string, check: () => Promise<void>): Promise<DependencyHealth> {
     const startedAt = performance.now();
     try {
-      await withTimeout(check(), this.config.health.checkTimeoutMs);
+      await withTimeout(check(), this.config.health.checkTimeoutMs, `${name} readiness check`);
       return { status: 'up', durationMs: elapsedSince(startedAt) };
     } catch (error: unknown) {
       const durationMs = elapsedSince(startedAt);
@@ -60,18 +61,4 @@ export class HealthService {
 
 function elapsedSince(startedAt: number): number {
   return Math.round(performance.now() - startedAt);
-}
-
-async function withTimeout(operation: Promise<void>, timeoutMs: number): Promise<void> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`Timed out after ${timeoutMs} ms`));
-    }, timeoutMs);
-  });
-  try {
-    await Promise.race([operation, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
 }

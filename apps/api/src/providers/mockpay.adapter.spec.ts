@@ -54,3 +54,40 @@ describe('ProviderAdapterRegistry', () => {
     );
   });
 });
+
+describe('MockPayAdapter.normalizeEvent', () => {
+  const adapter = new MockPayAdapter();
+
+  it('maps payment events to provider-neutral facts with bigint amounts', () => {
+    expect(adapter.normalizeEvent(event)).toEqual({
+      kind: 'payment',
+      event: { type: 'payment.succeeded', paymentId: 'pay_1', amountMinor: 1999n, currency: 'USD' },
+    });
+    expect(
+      adapter.normalizeEvent({
+        ...event,
+        type: 'payment.refunded',
+        data: { refund_id: 're_1', payment_id: 'pay_1', amount: 500, currency: 'USD' },
+      }),
+    ).toEqual({
+      kind: 'payment',
+      event: {
+        type: 'payment.refunded',
+        paymentId: 'pay_1',
+        refundId: 're_1',
+        amountMinor: 500n,
+        currency: 'USD',
+      },
+    });
+  });
+
+  it('marks well-formed events of other types as unsupported', () => {
+    expect(adapter.normalizeEvent({ ...event, type: 'customer.created', data: {} })).toEqual({
+      kind: 'unsupported',
+    });
+  });
+
+  it('reports a stored payload that no longer matches the schema', () => {
+    expect(adapter.normalizeEvent({ id: 'evt_1' })).toMatchObject({ kind: 'invalid' });
+  });
+});

@@ -1,32 +1,24 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ApiKeysModule } from './api-keys/api-keys.module';
-import { AuditModule } from './audit/audit.module';
 import { ApiKeyAuthGuard } from './auth/api-key-auth.guard';
 import { AuthModule } from './auth/auth.module';
-import { ClockModule } from './clock/clock.module';
-import { ConfigModule } from './config/config.module';
-import { CryptoModule } from './crypto/crypto.module';
-import { DatabaseModule } from './database/database.module';
-import { EventsModule } from './events/events.module';
+import { CoreModule } from './core/core.module';
+import { EndpointsModule } from './endpoints/endpoints.module';
 import { GlobalExceptionFilter } from './errors/global-exception.filter';
+import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
-import { LoggingModule } from './logging/logging.module';
+import { LedgerModule } from './ledger/ledger.module';
 import { ProvidersModule } from './providers/providers.module';
 import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
-import { RedisModule } from './redis/redis.module';
+import { TransactionsModule } from './transactions/transactions.module';
 
+/** The HTTP API process. Queue consumers run in the separate worker process. */
 @Module({
   imports: [
-    ConfigModule,
-    LoggingModule,
-    ClockModule,
-    DatabaseModule,
-    RedisModule,
-    CryptoModule,
-    AuditModule,
+    CoreModule,
     AuthModule,
     RateLimitModule,
     HealthModule,
@@ -34,6 +26,9 @@ import { RedisModule } from './redis/redis.module';
     ProvidersModule,
     IngestionModule,
     EventsModule,
+    EndpointsModule,
+    TransactionsModule,
+    LedgerModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },

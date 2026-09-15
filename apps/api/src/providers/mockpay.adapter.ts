@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { parseMockPayEvent } from '@relayforge/shared/providers';
+import { parseMockPayEvent, parseMockPayEventValue } from '@relayforge/shared/providers';
 import { WEBHOOK_HEADERS } from '@relayforge/shared/webhooks';
 import { ProviderAdapterType } from '../generated/prisma/client';
+import type { NormalizedEvent } from './payment-event';
 import type { ProviderAdapter, ProviderPayloadResult } from './provider-adapter';
 import { StandardWebhooksVerifier } from './standard-webhooks.verifier';
 
@@ -32,5 +33,50 @@ export class MockPayAdapter implements ProviderAdapter {
         payload: parsed.json,
       },
     };
+  }
+
+  normalizeEvent(payload: unknown): NormalizedEvent {
+    const parsed = parseMockPayEventValue(payload);
+    if (!parsed.ok) {
+      return { kind: 'invalid', issues: parsed.issues };
+    }
+    const { event } = parsed;
+    if (!event.known) {
+      return { kind: 'unsupported' };
+    }
+    switch (event.type) {
+      case 'payment.succeeded':
+        return {
+          kind: 'payment',
+          event: {
+            type: event.type,
+            paymentId: event.data.payment_id,
+            amountMinor: BigInt(event.data.amount),
+            currency: event.data.currency,
+          },
+        };
+      case 'payment.failed':
+        return {
+          kind: 'payment',
+          event: {
+            type: event.type,
+            paymentId: event.data.payment_id,
+            amountMinor: BigInt(event.data.amount),
+            currency: event.data.currency,
+            failureCode: event.data.failure_code,
+          },
+        };
+      case 'payment.refunded':
+        return {
+          kind: 'payment',
+          event: {
+            type: event.type,
+            paymentId: event.data.payment_id,
+            refundId: event.data.refund_id,
+            amountMinor: BigInt(event.data.amount),
+            currency: event.data.currency,
+          },
+        };
+    }
   }
 }
