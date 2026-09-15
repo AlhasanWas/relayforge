@@ -9,6 +9,7 @@ allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': false
   esbuild: false
+  msgpackr-extract: false
   prisma: false
   unrs-resolver: false
 
