@@ -71,3 +71,35 @@ jobs:
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
         run: pnpm --filter @relayforge/api db:check-drift
+
+  compose:
+    name: Docker Compose end to end
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+
+      # Exactly the documented flow: copy the example environment and start everything.
+      - name: Start the stack
+        run: |
+          cp .env.example .env
+          docker compose up --build --detach --wait --wait-timeout 300
+
+      - uses: ./.github/actions/setup
+
+      - name: Build shared package for the demo scripts
+        run: pnpm --filter @relayforge/shared build
+
+      - name: Send a signed event through ingestion, processing and delivery
+        run: pnpm demo:event
+
+      - name: Send concurrent duplicates and check idempotency
+        run: pnpm demo:duplicate
+
+      - name: Show service state and logs
+        if: failure()
+        run: |
+          docker compose ps --all
+          docker compose logs --no-color --tail 200
