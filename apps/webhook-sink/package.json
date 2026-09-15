@@ -1,0 +1,19 @@
+{
+  "name": "@relayforge/webhook-sink",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local stand-in for a customer webhook endpoint with switchable failure modes",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest",
+    "start": "node dist/main.js"
+  },
+  "devDependencies": {
+    "@types/jest": "30.0.0",
+    "@types/node": "24.13.4",
+    "jest": "30.5.1",
+    "ts-jest": "29.4.12"
+  }
+}
