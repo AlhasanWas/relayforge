@@ -1,6 +1,8 @@
 // @ts-check
 import eslint from '@eslint/js';
+import nextPlugin from '@next/eslint-plugin-next';
 import prettier from 'eslint-config-prettier';
+import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -9,6 +11,7 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/.next/**',
+      '**/next-env.d.ts',
       '**/coverage/**',
       '**/node_modules/**',
       '**/src/generated/**',
@@ -34,6 +37,11 @@ export default tseslint.config(
       '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }],
       'no-console': 'error',
     },
+  },
+  {
+    files: ['apps/dashboard/**/*.ts', 'apps/dashboard/**/*.tsx'],
+    extends: [nextPlugin.configs['core-web-vitals'], reactHooks.configs.flat['recommended-latest']],
+    settings: { next: { rootDir: 'apps/dashboard' } },
   },
   {
     files: ['**/*.js', '**/*.cjs', '**/*.mjs'],

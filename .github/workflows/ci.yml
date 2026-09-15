@@ -17,6 +17,8 @@ jobs:
     name: Lint, typecheck, unit tests, build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup

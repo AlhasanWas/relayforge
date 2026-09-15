@@ -1,0 +1,32 @@
+{
+  "name": "@relayforge/dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Operator dashboard for the RelayForge demo workspace",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest",
+    "start": "next start --port 3001"
+  },
+  "dependencies": {
+    "@relayforge/shared": "workspace:*",
+    "next": "16.3.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/jest": "30.0.0",
+    "@types/node": "24.13.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "jest": "30.5.1",
+    "tailwindcss": "4.3.3",
+    "ts-jest": "29.4.12"
+  }
+}
