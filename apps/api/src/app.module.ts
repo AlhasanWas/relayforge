@@ -11,9 +11,11 @@ import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { LedgerModule } from './ledger/ledger.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { ProvidersModule } from './providers/providers.module';
 import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { TransactionsModule } from './transactions/transactions.module';
 
 /** The HTTP API process. Queue consumers run in the separate worker process. */
@@ -31,6 +33,8 @@ import { TransactionsModule } from './transactions/transactions.module';
     TransactionsModule,
     LedgerModule,
     DeliveriesModule,
+    ReconciliationModule,
+    MetricsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },

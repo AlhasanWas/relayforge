@@ -8,7 +8,8 @@ export type AuditAction =
   | 'endpoint.created'
   | 'endpoint.updated'
   | 'endpoint.deleted'
-  | 'delivery.replayed';
+  | 'delivery.replayed'
+  | 'reconciliation.run';
 
 export interface AuditEntry {
   readonly workspaceId: string;
