@@ -24,6 +24,7 @@ export class EventsService {
         status: query.status,
         eventType: query.eventType,
         providerConnectionId: query.providerConnectionId,
+        externalEventId: query.externalEventId,
       },
       // Payloads can be large; the list view does not need them.
       omit: { payload: true },

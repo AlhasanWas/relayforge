@@ -352,6 +352,24 @@ describe('webhook ingestion', () => {
         .expect(404);
     });
 
+    it('finds an event by the provider’s event id', async () => {
+      const apiKey = await createApiKey(prisma, connection.workspaceId, 'MEMBER');
+      const wanted = paymentSucceeded();
+      await send(signed(wanted)).expect(202);
+      await send(signed()).expect(202);
+
+      const list = await request(app.getHttpServer())
+        .get(`/v1/events?externalEventId=${wanted.id}`)
+        .set('Authorization', `Bearer ${apiKey.key}`)
+        .expect(200);
+
+      expect(
+        (list.body as { data: { externalEventId: string }[] }).data.map(
+          (event) => event.externalEventId,
+        ),
+      ).toEqual([wanted.id]);
+    });
+
     it('lists rejected attempts and provider connections without exposing secrets', async () => {
       const apiKey = await createApiKey(prisma, connection.workspaceId, 'MEMBER');
       await send(signed(paymentSucceeded(), { secret: generateWebhookSecret() })).expect(401);

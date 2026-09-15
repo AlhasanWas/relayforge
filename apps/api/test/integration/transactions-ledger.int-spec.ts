@@ -93,6 +93,23 @@ describe('transactions and ledger API', () => {
     });
   });
 
+  it('finds a transaction by the provider’s payment id', async () => {
+    await ingestAndProcess(
+      paymentSucceeded({ data: { payment_id: 'pay_other', amount: 700, currency: 'USD' } }),
+    );
+
+    const response = await http()
+      .get('/v1/transactions?externalPaymentId=pay_other')
+      .set(bearer(member))
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      data: [{ externalPaymentId: 'pay_other', amountMinor: '700' }],
+      nextCursor: null,
+    });
+    expect((response.body as { data: unknown[] }).data).toHaveLength(1);
+  });
+
   it('returns a transaction with its balanced journals', async () => {
     const list = await http().get('/v1/transactions').set(bearer(member)).expect(200);
     const [transaction] = (list.body as { data: { id: string }[] }).data;

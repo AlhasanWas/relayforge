@@ -19,6 +19,12 @@ export class ListEventsQueryDto extends PageQueryDto {
   @IsOptional()
   @IsUUID()
   providerConnectionId?: string;
+
+  @ApiPropertyOptional({ description: 'The provider’s event id' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  externalEventId?: string;
 }
 
 export class EventSummaryResponse {

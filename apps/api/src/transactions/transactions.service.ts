@@ -26,6 +26,7 @@ export class TransactionsService {
         workspaceId,
         status: query.status,
         providerConnectionId: query.providerConnectionId,
+        externalPaymentId: query.externalPaymentId,
       },
     });
     return toPage(rows, query, toTransactionResponse);

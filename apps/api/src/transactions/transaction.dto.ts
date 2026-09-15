@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { type Transaction, TransactionStatus } from '../generated/prisma/client';
 import { PageQueryDto } from '../http/pagination';
 import { JournalResponse } from '../ledger/ledger.dto';
@@ -14,6 +14,12 @@ export class ListTransactionsQueryDto extends PageQueryDto {
   @IsOptional()
   @IsUUID()
   providerConnectionId?: string;
+
+  @ApiPropertyOptional({ description: 'The provider’s payment id' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  externalPaymentId?: string;
 }
 
 export class TransactionResponse {
