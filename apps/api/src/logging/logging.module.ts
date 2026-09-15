@@ -7,17 +7,17 @@ import { resolveRequestId } from './request-id';
  * Log paths that must never be written. Request bodies are not logged at all;
  * these cover headers and any structured field that could carry a credential.
  */
+const SENSITIVE_FIELDS = ['apiKey', 'secret', 'signingSecret', 'password', 'token'] as const;
+
 export const REDACTED_LOG_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers["x-api-key"]',
   'req.headers["webhook-signature"]',
   'res.headers["set-cookie"]',
-  '*.apiKey',
-  '*.secret',
-  '*.signingSecret',
-  '*.password',
-  '*.token',
+  // Fields passed to `logger.info({ ... })` sit at the top level; `*.` covers one level down.
+  ...SENSITIVE_FIELDS,
+  ...SENSITIVE_FIELDS.map((field) => `*.${field}`),
 ];
 
 /**
