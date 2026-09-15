@@ -7,7 +7,8 @@ export type AuditAction =
   | 'api_key.revoked'
   | 'endpoint.created'
   | 'endpoint.updated'
-  | 'endpoint.deleted';
+  | 'endpoint.deleted'
+  | 'delivery.replayed';
 
 export interface AuditEntry {
   readonly workspaceId: string;

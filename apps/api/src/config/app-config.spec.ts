@@ -1,3 +1,4 @@
+import { RetryableStatusCodes } from '../deliveries/retryable-status-codes';
 import { ConfigValidationError, loadConfig } from './app-config';
 
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
@@ -36,7 +37,23 @@ describe('loadConfig', () => {
         retryBaseMs: 5_000,
         retryMaxMs: 600_000,
       },
-      delivery: { maxAttempts: 8 },
+      delivery: {
+        maxAttempts: 8,
+        concurrency: 10,
+        timeoutMs: 10_000,
+        leaseMs: 60_000,
+        retryBaseMs: 10_000,
+        retryMaxMs: 3_600_000,
+        retryableStatusCodes: expect.any(RetryableStatusCodes) as RetryableStatusCodes,
+        responseBodyMaxBytes: 2_048,
+        allowPrivateDestinations: false,
+      },
+      maintenance: {
+        intervalMs: 30_000,
+        batchSize: 500,
+        staleAfterMs: 300_000,
+        outboxRetentionMs: 604_800_000,
+      },
       endpoints: { allowHttp: false },
       health: { checkTimeoutMs: 2_000 },
     });
@@ -70,6 +87,7 @@ describe('loadConfig', () => {
       { ENCRYPTION_KEY: Buffer.alloc(16).toString('base64') },
     ],
     ['an ambiguous boolean', { SWAGGER_ENABLED: 'maybe' }],
+    ['an invalid retryable status list', { DELIVERY_RETRYABLE_STATUS_CODES: '200,5xx' }],
   ])('rejects %s', (_label, override) => {
     expect(() => loadConfig({ ...REQUIRED, ...override })).toThrow(ConfigValidationError);
   });

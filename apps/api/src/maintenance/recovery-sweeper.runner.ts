@@ -7,31 +7,26 @@ import {
 import { PinoLogger } from 'nestjs-pino';
 import { APP_CONFIG, type AppConfig } from '../config/app-config';
 import { PollingLoop } from '../worker/polling-loop';
-import { OutboxPublisher } from './outbox-publisher';
+import { RecoverySweeper } from './recovery-sweeper';
 
-/**
- * Polls the outbox in the worker process. A full batch is followed immediately by
- * another poll so a backlog drains without waiting for the interval. Safe to run
- * in any number of replicas: claims use SKIP LOCKED and leases.
- */
 @Injectable()
-export class OutboxPublisherRunner implements OnApplicationBootstrap, OnApplicationShutdown {
+export class RecoverySweeperRunner implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly loop: PollingLoop;
 
   constructor(
-    publisher: OutboxPublisher,
+    sweeper: RecoverySweeper,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     logger: PinoLogger,
   ) {
-    logger.setContext(OutboxPublisherRunner.name);
-    const { pollIntervalMs, batchSize } = config.outbox;
+    logger.setContext(RecoverySweeperRunner.name);
+    const { intervalMs } = config.maintenance;
     this.loop = new PollingLoop(
-      'outbox-publisher',
+      'recovery-sweeper',
       async () => {
-        const result = await publisher.publishBatch();
-        return result.claimed === batchSize && result.failed === 0 ? 0 : pollIntervalMs;
+        await sweeper.sweep();
+        return intervalMs;
       },
-      pollIntervalMs,
+      intervalMs,
       logger,
     );
   }

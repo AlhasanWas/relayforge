@@ -4,6 +4,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { ApiKeyAuthGuard } from './auth/api-key-auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { CoreModule } from './core/core.module';
+import { DeliveriesModule } from './deliveries/deliveries.module';
 import { EndpointsModule } from './endpoints/endpoints.module';
 import { GlobalExceptionFilter } from './errors/global-exception.filter';
 import { EventsModule } from './events/events.module';
@@ -29,6 +30,7 @@ import { TransactionsModule } from './transactions/transactions.module';
     EndpointsModule,
     TransactionsModule,
     LedgerModule,
+    DeliveriesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },

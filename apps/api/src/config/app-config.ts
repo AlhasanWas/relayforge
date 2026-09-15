@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RetryableStatusCodes } from '../deliveries/retryable-status-codes';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 
@@ -12,6 +13,18 @@ const encryptionKeySchema = z
   });
 
 const positiveInt = () => z.coerce.number().int().positive();
+
+const retryableStatusCodesSchema = z.string().transform((value, context) => {
+  try {
+    return RetryableStatusCodes.parse(value);
+  } catch (error: unknown) {
+    context.addIssue({
+      code: 'custom',
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return z.NEVER;
+  }
+});
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -46,6 +59,21 @@ const environmentSchema = z.object({
   EVENT_PROCESSING_RETRY_MAX_MS: positiveInt().default(600_000),
 
   DELIVERY_MAX_ATTEMPTS: positiveInt().max(50).default(8),
+  DELIVERY_CONCURRENCY: positiveInt().max(200).default(10),
+  DELIVERY_TIMEOUT_MS: positiveInt().default(10_000),
+  DELIVERY_LEASE_MARGIN_MS: positiveInt().default(50_000),
+  DELIVERY_RETRY_BASE_MS: positiveInt().default(10_000),
+  DELIVERY_RETRY_MAX_MS: positiveInt().default(3_600_000),
+  DELIVERY_RETRYABLE_STATUS_CODES: retryableStatusCodesSchema.default(
+    RetryableStatusCodes.parse('408,429,5xx'),
+  ),
+  DELIVERY_RESPONSE_BODY_MAX_BYTES: positiveInt().max(65_536).default(2_048),
+  DELIVERY_ALLOW_PRIVATE_DESTINATIONS: z.stringbool().default(false),
+
+  MAINTENANCE_INTERVAL_MS: positiveInt().default(30_000),
+  MAINTENANCE_BATCH_SIZE: positiveInt().max(10_000).default(500),
+  RECOVERY_STALE_AFTER_MS: positiveInt().default(300_000),
+  OUTBOX_RETENTION_MS: positiveInt().default(7 * 24 * 3_600_000),
   ENDPOINT_ALLOW_HTTP: z.stringbool().default(false),
 
   HEALTH_CHECK_TIMEOUT_MS: positiveInt().default(2_000),
@@ -108,6 +136,24 @@ export interface AppConfig {
   readonly delivery: {
     /** Snapshotted onto each delivery when it is created. */
     readonly maxAttempts: number;
+    readonly concurrency: number;
+    /** Hard limit for connecting, sending and receiving the response status. */
+    readonly timeoutMs: number;
+    /** Lease length = timeout + margin, so a live worker never loses its lease to recovery. */
+    readonly leaseMs: number;
+    readonly retryBaseMs: number;
+    readonly retryMaxMs: number;
+    readonly retryableStatusCodes: RetryableStatusCodes;
+    readonly responseBodyMaxBytes: number;
+    /** Disables SSRF protection. Local development against a private webhook sink only. */
+    readonly allowPrivateDestinations: boolean;
+  };
+  readonly maintenance: {
+    readonly intervalMs: number;
+    readonly batchSize: number;
+    /** How long work may sit without a pending or recent outbox message before recovery re-requests it. */
+    readonly staleAfterMs: number;
+    readonly outboxRetentionMs: number;
   };
   readonly endpoints: {
     /** Allow plain-http endpoint URLs (local development only). */
@@ -179,6 +225,20 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     },
     delivery: {
       maxAttempts: env.DELIVERY_MAX_ATTEMPTS,
+      concurrency: env.DELIVERY_CONCURRENCY,
+      timeoutMs: env.DELIVERY_TIMEOUT_MS,
+      leaseMs: env.DELIVERY_TIMEOUT_MS + env.DELIVERY_LEASE_MARGIN_MS,
+      retryBaseMs: env.DELIVERY_RETRY_BASE_MS,
+      retryMaxMs: env.DELIVERY_RETRY_MAX_MS,
+      retryableStatusCodes: env.DELIVERY_RETRYABLE_STATUS_CODES,
+      responseBodyMaxBytes: env.DELIVERY_RESPONSE_BODY_MAX_BYTES,
+      allowPrivateDestinations: env.DELIVERY_ALLOW_PRIVATE_DESTINATIONS,
+    },
+    maintenance: {
+      intervalMs: env.MAINTENANCE_INTERVAL_MS,
+      batchSize: env.MAINTENANCE_BATCH_SIZE,
+      staleAfterMs: env.RECOVERY_STALE_AFTER_MS,
+      outboxRetentionMs: env.OUTBOX_RETENTION_MS,
     },
     endpoints: {
       allowHttp: env.ENDPOINT_ALLOW_HTTP,

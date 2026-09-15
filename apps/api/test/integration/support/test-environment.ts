@@ -8,6 +8,12 @@ export const TEST_DATABASE_URL =
 export const TEST_REDIS_URL = process.env.TEST_REDIS_URL ?? 'redis://localhost:6379/1';
 
 /**
+ * One key per test run, shared by every app and worker in it, as in a real deployment
+ * where the API and worker processes must decrypt each other's secrets.
+ */
+const TEST_ENCRYPTION_KEY = randomBytes(32).toString('base64');
+
+/**
  * Integration tests truncate every table. Refuse to point them at anything that
  * is not clearly a disposable test database.
  */
@@ -39,7 +45,7 @@ export function createTestConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     DATABASE_URL: TEST_DATABASE_URL,
     DATABASE_POOL_MAX: '5',
     REDIS_URL: TEST_REDIS_URL,
-    ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+    ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
     // High enough that only tests about rate limiting ever reach it.
     RATE_LIMIT_MANAGEMENT_MAX: '10000',
     HEALTH_CHECK_TIMEOUT_MS: '1000',
