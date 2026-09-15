@@ -149,6 +149,7 @@ describe('webhook delivery', () => {
         deliveredAt: clock.now(),
         attemptCount: 1,
         leaseOwner: null,
+        nextAttemptAt: null,
       });
       expect(await attemptsOf(delivery.id)).toEqual([
         expect.objectContaining({ attemptNumber: 1, outcome: 'SUCCESS', responseStatus: 200 }),
@@ -256,6 +257,7 @@ describe('webhook delivery', () => {
         status: 'DEAD_LETTER',
         deadLetterReason: 'MAX_ATTEMPTS_EXHAUSTED',
         attemptCount: 3,
+        nextAttemptAt: null,
       });
       expect(
         (await attemptsOf(delivery.id)).map((a) => [a.attemptNumber, a.responseStatus]),
