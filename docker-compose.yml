@@ -1,5 +1,14 @@
 name: relayforge
 
+# Settings for containers that reach PostgreSQL and Redis on the compose network.
+# Values from .env apply first; these override the host-oriented URLs in it.
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://${POSTGRES_USER:-relayforge}:${POSTGRES_PASSWORD:-relayforge}@postgres:5432/${POSTGRES_DB:-relayforge}
+  REDIS_URL: redis://redis:6379
+  # Local only: the demo delivers to the webhook sink over plain http on a private network.
+  ENDPOINT_ALLOW_HTTP: 'true'
+  DELIVERY_ALLOW_PRIVATE_DESTINATIONS: 'true'
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -31,6 +40,87 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # One-shot: applies migrations and seeds the demo workspace, then exits.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    env_file: .env
+    environment:
+      <<: *app-environment
+      DEMO_WEBHOOK_ENDPOINT_URL: http://webhook-sink:4000/webhooks
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    init: true
+    env_file: .env
+    environment:
+      <<: *app-environment
+      HTTP_PORT: '3000'
+    ports:
+      - '${API_PORT:-3000}:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    command: ['node', 'dist/worker.js']
+    init: true
+    env_file: .env
+    environment:
+      <<: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  webhook-sink:
+    build:
+      context: .
+      dockerfile: apps/webhook-sink/Dockerfile
+    init: true
+    environment:
+      SINK_PORT: '4000'
+      SINK_MODE: ${SINK_MODE:-SUCCESS}
+    ports:
+      - '${SINK_PORT:-4000}:4000'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
 
 volumes:
   postgres-data:

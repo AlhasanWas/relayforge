@@ -6,11 +6,13 @@
  *   dashboard and demo scripts can share a known development credential.
  * - A MockPay connection for the demo workspace, with the ingress key and signing
  *   secret the MockPay demo scripts use.
+ * - Optionally, a webhook endpoint at DEMO_WEBHOOK_ENDPOINT_URL (the local webhook sink).
  *
  * Never run against production: the demo credentials live in `.env.example`.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
-import { decodeWebhookSecret } from '@relayforge/shared/webhooks';
+import { MOCKPAY_EVENT_TYPES } from '@relayforge/shared/providers';
+import { decodeWebhookSecret, generateWebhookSecret } from '@relayforge/shared/webhooks';
 import { apiKeyPrefix, hashApiKey } from '../src/auth/api-key';
 import { loadConfig } from '../src/config/app-config';
 import { SecretCipher } from '../src/crypto/secret-cipher';
@@ -25,6 +27,7 @@ interface SeedInput {
   adminApiKeyPrefix: string;
   mockPayIngressKey: string;
   mockPaySigningSecret: string;
+  webhookEndpointUrl: string | null;
 }
 
 function readInput(environment: NodeJS.ProcessEnv): SeedInput {
@@ -46,7 +49,16 @@ function readInput(environment: NodeJS.ProcessEnv): SeedInput {
   const mockPaySigningSecret = environment.DEMO_MOCKPAY_SIGNING_SECRET ?? '';
   decodeWebhookSecret(mockPaySigningSecret);
 
-  return { adminApiKey, adminApiKeyPrefix, mockPayIngressKey, mockPaySigningSecret };
+  const rawEndpointUrl = environment.DEMO_WEBHOOK_ENDPOINT_URL?.trim() ?? '';
+  const webhookEndpointUrl = rawEndpointUrl === '' ? null : rawEndpointUrl;
+
+  return {
+    adminApiKey,
+    adminApiKeyPrefix,
+    mockPayIngressKey,
+    mockPaySigningSecret,
+    webhookEndpointUrl,
+  };
 }
 
 async function seed(prisma: PrismaClient, cipher: SecretCipher, input: SeedInput): Promise<void> {
@@ -90,6 +102,27 @@ async function seed(prisma: PrismaClient, cipher: SecretCipher, input: SeedInput
       timestampToleranceSec: 300,
     },
   });
+
+  if (input.webhookEndpointUrl !== null) {
+    const existing = await prisma.webhookEndpoint.findFirst({
+      where: { workspaceId: DEMO_WORKSPACE_ID, url: input.webhookEndpointUrl, deletedAt: null },
+    });
+    if (existing === null) {
+      await prisma.webhookEndpoint.create({
+        data: {
+          workspaceId: DEMO_WORKSPACE_ID,
+          url: input.webhookEndpointUrl,
+          description: 'Local webhook sink (seed)',
+          eventTypes: [...MOCKPAY_EVENT_TYPES],
+          // The sink does not verify signatures, so the secret is not surfaced anywhere.
+          signingSecretEncrypted: cipher.encrypt(
+            generateWebhookSecret(),
+            'webhook_endpoint.signing_secret',
+          ),
+        },
+      });
+    }
+  }
 }
 
 async function main(): Promise<void> {

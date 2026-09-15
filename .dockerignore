@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/*.tsbuildinfo
+apps/api/src/generated
+.git
+.github
+.env
+.env.*
+!.env.example
+docs
+*.md
