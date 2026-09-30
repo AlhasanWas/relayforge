@@ -41,6 +41,7 @@ export function attemptRecord(
     attemptNumber: input.attemptNumber,
     outcome: input.outcome,
     startedAt: input.startedAt,
+    recordedAt: input.startedAt,
     durationMs: input.durationMs,
   };
   const { result } = input;

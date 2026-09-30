@@ -38,6 +38,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestE
   });
   configureHttpApp(app, config);
   await app.init();
+  await app.listen(0);
 
   if (options.waitForRedis ?? true) {
     await waitUntilReady(app.get<Redis>(REDIS));

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
+import { Clock } from '../clock/clock';
 import { PrismaService } from '../database/prisma.service';
 import type { Prisma, RejectionReason } from '../generated/prisma/client';
 import { type IncomingWebhook, sha256Hex } from './incoming-webhook';
@@ -21,6 +22,7 @@ export interface RejectionContext {
 export class RejectedAttemptRecorder {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly clock: Clock,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(RejectedAttemptRecorder.name);
@@ -45,6 +47,7 @@ export class RejectedAttemptRecorder {
           requestId: context.webhook.requestId ?? 'unknown',
           sourceIp: context.webhook.sourceIp,
           metadata: context.metadata,
+          receivedAt: this.clock.now(),
         },
       });
     } catch (error: unknown) {
