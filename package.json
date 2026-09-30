@@ -6,7 +6,7 @@
   "license": "MIT",
   "packageManager": "pnpm@11.26.0",
   "engines": {
-    "node": ">=24.11.0 <25",
+    "node": ">=24.11.0",
     "pnpm": "11.26.0"
   },
   "scripts": {
@@ -19,7 +19,8 @@
     "test:integration": "pnpm -r run test:integration",
     "demo:event": "tsx scripts/demo/send-event.ts",
     "demo:duplicate": "tsx scripts/demo/send-duplicates.ts",
-    "demo:sink": "tsx scripts/demo/set-sink-mode.ts"
+    "demo:sink": "tsx scripts/demo/set-sink-mode.ts",
+    "demo:benchmark": "tsx scripts/demo/benchmark.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

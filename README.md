@@ -1,5 +1,14 @@
 # RelayForge
 
+[![CI](https://github.com/AlhasanWas/relayforge/actions/workflows/ci.yml/badge.svg)](https://github.com/AlhasanWas/relayforge/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-11.x-E0234E?logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7.4-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 Webhook ingestion, transaction processing and reliable webhook delivery.
 
 RelayForge receives signed webhooks from payment providers, turns each event into
@@ -339,6 +348,15 @@ settings). Switch back with `pnpm demo:sink SUCCESS` and press **Replay**. Other
 modes: `TIMEOUT` and `RANDOM_FAILURE 0.5`. `GET http://localhost:4000/received`
 shows what the sink received, with repeated `webhook-id` values flagged as
 duplicates.
+
+```bash
+pnpm demo:benchmark 50 10
+```
+
+Runs an end-to-end ingestion and asynchronous settlement benchmark across 50 signed
+events at concurrency 10, measuring wall time, throughput (RPS), and latency
+percentiles (min, mean, p50, p90, p95, p99, max), followed by double-entry ledger
+integrity verification.
 
 The brief asked for `npm run demo:*`; this is a pnpm workspace, so the scripts run
 with `pnpm`.
